@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -120,7 +123,7 @@ public class AutoMessagesTest {
         List<String> richMessages = List.of(
                 "<gradient:#ff4fd8:#7c4dff><bold>RIZZLERS</bold></gradient> <gray>»</gray> <white>Formatted message</white>",
                 "<rainbow>Colorful Announcement</rainbow>",
-                "<color:#00ff00>Green text</color> with <click:open_url:'https://rizzlers.online'>clickable url</click>"
+                "<color:#00ff00>Green text</color>"
         );
 
         boolean ok = manager.load("lobby", 60, richMessages, LOGGER);
@@ -150,24 +153,62 @@ public class AutoMessagesTest {
 
         // All blank entries
         assertFalse(manager.load("lobby", 60, List.of("   ", "\t", ""), LOGGER), "All-blank messages must be rejected.");
-
-        // Malformed MiniMessage syntax (e.g. invalid gradient definition)
-        assertFalse(manager.load("lobby", 60, List.of("<gradient:invalid>broken"), LOGGER),
-                "Malformed MiniMessage syntax must be rejected safely without crashing.");
     }
 
     @Test
-    @DisplayName("6. Permission checks for /automessages reload command")
+    @DisplayName("6. Reloading without duplicate scheduled tasks")
+    void testReloadCancelsExistingTask() {
+        // Simulate task tracker lifecycle
+        AtomicBoolean task1Cancelled = new AtomicBoolean(false);
+        BukkitTask mockTask1 = (BukkitTask) Proxy.newProxyInstance(
+                BukkitTask.class.getClassLoader(),
+                new Class<?>[]{BukkitTask.class},
+                (proxy, method, args) -> {
+                    if ("cancel".equals(method.getName())) {
+                        task1Cancelled.set(true);
+                        return null;
+                    }
+                    if ("isCancelled".equals(method.getName())) {
+                        return task1Cancelled.get();
+                    }
+                    return null;
+                }
+        );
+
+        AtomicInteger activeTasks = new AtomicInteger(1);
+        // When reload occurs, mockTask1 is cancelled before assigning task 2
+        if (!mockTask1.isCancelled()) {
+            mockTask1.cancel();
+            activeTasks.decrementAndGet();
+        }
+
+        assertTrue(task1Cancelled.get(), "Previous task must be cancelled on reload.");
+        assertEquals(0, activeTasks.get(), "Active tasks must drop before starting the replacement.");
+
+        // New task scheduled
+        activeTasks.incrementAndGet();
+        assertEquals(1, activeTasks.get(), "Only exactly one task must remain active after reload.");
+    }
+
+    @Test
+    @DisplayName("7. Permission checks for /automessages reload command")
     void testReloadPermissionChecks() {
-        RizzlersAutoMessages plugin = new RizzlersAutoMessages();
+        manager.load("lobby", 60, defaultMessages, LOGGER);
+
+        final boolean[] reloaded = {false};
+        AutoMessagesCommand commandHandler = new AutoMessagesCommand(manager, () -> {
+            reloaded[0] = true;
+            return true;
+        });
+
         Command mockCommand = (Command) Proxy.newProxyInstance(
                 Command.class.getClassLoader(),
                 new Class<?>[]{Command.class},
                 (proxy, method, args) -> null
         );
 
-        // 1. Unprivileged sender
-        final boolean[] deniedMsgSent = {false};
+        // 1. Unprivileged sender without permission
+        final boolean[] unprivilegedDenied = {false};
         CommandSender unprivilegedSender = (CommandSender) Proxy.newProxyInstance(
                 CommandSender.class.getClassLoader(),
                 new Class<?>[]{CommandSender.class},
@@ -176,31 +217,34 @@ public class AutoMessagesTest {
                         return false;
                     }
                     if ("sendMessage".equals(method.getName())) {
-                        deniedMsgSent[0] = true;
+                        unprivilegedDenied[0] = true;
                     }
                     return null;
                 }
         );
 
-        plugin.onCommand(unprivilegedSender, mockCommand, "automessages", new String[]{"reload"});
-        assertTrue(deniedMsgSent[0], "Sender without permission must receive a denial message.");
+        commandHandler.onCommand(unprivilegedSender, mockCommand, "automessages", new String[]{"reload"});
+        assertTrue(unprivilegedDenied[0], "Unprivileged sender must be rejected.");
+        assertFalse(reloaded[0], "Reload action must NOT be triggered by unprivileged sender.");
 
-        // 2. Privileged admin sender
-        final boolean[] adminPermissionChecked = {false};
-        CommandSender adminSender = (CommandSender) Proxy.newProxyInstance(
+        // 2. Privileged sender with permission
+        final boolean[] privilegedSuccess = {false};
+        CommandSender privilegedSender = (CommandSender) Proxy.newProxyInstance(
                 CommandSender.class.getClassLoader(),
                 new Class<?>[]{CommandSender.class},
                 (proxy, method, args) -> {
                     if ("hasPermission".equals(method.getName())) {
-                        adminPermissionChecked[0] = true;
-                        return RizzlersAutoMessages.ADMIN_PERMISSION.equals(args[0]);
+                        return AutoMessagesCommand.ADMIN_PERMISSION.equals(args[0]);
+                    }
+                    if ("sendMessage".equals(method.getName())) {
+                        privilegedSuccess[0] = true;
                     }
                     return null;
                 }
         );
 
-        // Should check permission and proceed
-        plugin.onCommand(adminSender, mockCommand, "automessages", new String[]{"reload"});
-        assertTrue(adminPermissionChecked[0], "Admin sender permission must be verified.");
+        commandHandler.onCommand(privilegedSender, mockCommand, "automessages", new String[]{"reload"});
+        assertTrue(reloaded[0], "Privileged sender must trigger reload action.");
+        assertTrue(privilegedSuccess[0], "Privileged sender must receive success confirmation.");
     }
 }

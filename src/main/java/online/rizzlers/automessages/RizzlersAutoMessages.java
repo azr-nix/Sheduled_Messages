@@ -1,27 +1,17 @@
 package online.rizzlers.automessages;
 
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
-import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 
-public final class RizzlersAutoMessages extends JavaPlugin implements CommandExecutor, TabCompleter {
+public final class RizzlersAutoMessages extends JavaPlugin {
 
-    public static final String ADMIN_PERMISSION = "rizzlersautomessages.admin";
-
-    private final MiniMessage miniMessage = MiniMessage.miniMessage();
     private final MessageManager messageManager = new MessageManager();
     private BukkitTask messageTask;
 
@@ -42,8 +32,16 @@ public final class RizzlersAutoMessages extends JavaPlugin implements CommandExe
 
         PluginCommand command = getCommand("automessages");
         if (command != null) {
-            command.setExecutor(this);
-            command.setTabCompleter(this);
+            AutoMessagesCommand handler = new AutoMessagesCommand(messageManager, () -> {
+                reloadConfig();
+                if (!loadSettings()) {
+                    return false;
+                }
+                startScheduler();
+                return true;
+            });
+            command.setExecutor(handler);
+            command.setTabCompleter(handler);
         }
 
         getLogger().info("==================================================");
@@ -93,44 +91,6 @@ public final class RizzlersAutoMessages extends JavaPlugin implements CommandExe
             count++;
         }
         getLogger().fine("Dispatched scheduled message to " + count + " player(s) on " + messageManager.getServerName() + ".");
-    }
-
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (args.length == 1 && args[0].equalsIgnoreCase("reload")) {
-            if (!sender.hasPermission(ADMIN_PERMISSION)) {
-                sender.sendMessage(miniMessage.deserialize("<red>You do not have permission to execute this command."));
-                return true;
-            }
-
-            reloadConfig();
-            if (!loadSettings()) {
-                sender.sendMessage(miniMessage.deserialize("<red>Invalid configuration in config.yml! Existing schedule remains active. Check console."));
-                return true;
-            }
-
-            startScheduler();
-            sender.sendMessage(miniMessage.deserialize("<green>RizzlersAutoMessages configuration reloaded successfully for server '<yellow>"
-                    + messageManager.getServerName() + "</yellow>' (" + messageManager.getIntervalSeconds() + "s interval, "
-                    + messageManager.getMessageCount() + " messages)."));
-            getLogger().info("Configuration reloaded by " + sender.getName() + ".");
-            return true;
-        }
-
-        sender.sendMessage(miniMessage.deserialize("<gold>=== RizzlersAutoMessages ===</gold>"));
-        sender.sendMessage(miniMessage.deserialize("<yellow>/automessages reload</yellow> <gray>- Reload configuration and restart timer</gray>"));
-        return true;
-    }
-
-    @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        if (args.length == 1 && sender.hasPermission(ADMIN_PERMISSION)) {
-            String prefix = args[0].toLowerCase(Locale.ROOT);
-            if ("reload".startsWith(prefix)) {
-                return List.of("reload");
-            }
-        }
-        return Collections.emptyList();
     }
 
     @Override
