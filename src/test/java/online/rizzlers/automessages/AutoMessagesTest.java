@@ -201,11 +201,12 @@ public class AutoMessagesTest {
             return true;
         });
 
-        Command mockCommand = (Command) Proxy.newProxyInstance(
-                Command.class.getClassLoader(),
-                new Class<?>[]{Command.class},
-                (proxy, method, args) -> null
-        );
+        Command testCommand = new Command("automessages") {
+            @Override
+            public boolean execute(CommandSender sender, String commandLabel, String[] args) {
+                return false;
+            }
+        };
 
         // 1. Unprivileged sender without permission
         final boolean[] unprivilegedDenied = {false};
@@ -223,7 +224,7 @@ public class AutoMessagesTest {
                 }
         );
 
-        commandHandler.onCommand(unprivilegedSender, mockCommand, "automessages", new String[]{"reload"});
+        commandHandler.onCommand(unprivilegedSender, testCommand, "automessages", new String[]{"reload"});
         assertTrue(unprivilegedDenied[0], "Unprivileged sender must be rejected.");
         assertFalse(reloaded[0], "Reload action must NOT be triggered by unprivileged sender.");
 
@@ -243,7 +244,7 @@ public class AutoMessagesTest {
                 }
         );
 
-        commandHandler.onCommand(privilegedSender, mockCommand, "automessages", new String[]{"reload"});
+        commandHandler.onCommand(privilegedSender, testCommand, "automessages", new String[]{"reload"});
         assertTrue(reloaded[0], "Privileged sender must trigger reload action.");
         assertTrue(privilegedSuccess[0], "Privileged sender must receive success confirmation.");
     }
