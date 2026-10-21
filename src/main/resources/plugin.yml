@@ -1,0 +1,15 @@
+name: RizzlersAutoMessages
+version: 1.0.0
+main: online.rizzlers.automessages.RizzlersAutoMessages
+api-version: '26.3'
+author: RIZZLERS
+description: Configurable rotating scheduled chat messages for RIZZLERS servers.
+commands:
+  automessages:
+    description: Manage RizzlersAutoMessages
+    usage: /automessages reload
+    permission: rizzlersautomessages.admin
+permissions:
+  rizzlersautomessages.admin:
+    description: Allows reloading the scheduled message configuration
+    default: op

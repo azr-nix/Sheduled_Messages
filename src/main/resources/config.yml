@@ -1,0 +1,19 @@
+# ========================================================
+# RIZZLERS Auto Messages Configuration
+# ========================================================
+# Configure each backend separately:
+# Lobby:    server-name: "lobby",    interval-seconds: 60
+# Survival: server-name: "survival", interval-seconds: 120
+#
+# Message formatting uses Adventure MiniMessage syntax.
+# Example: <gradient:#ff4fd8:#7c4dff><bold>RIZZLERS</bold></gradient>
+
+server-name: "lobby"
+interval-seconds: 60
+
+# Messages rotate in sequence and repeat indefinitely.
+messages:
+  - "<gradient:#ff4fd8:#7c4dff><bold>RIZZLERS</bold></gradient> <gray>»</gray> <white>Thanks for playing on RIZZLERS!</white>"
+  - "<gradient:#ff4fd8:#7c4dff><bold>RIZZLERS</bold></gradient> <gray>»</gray> <white>Join our Discord community for updates and events!</white>"
+  - "<gradient:#ff4fd8:#7c4dff><bold>RIZZLERS</bold></gradient> <gray>»</gray> <white>Need help? Contact a staff member.</white>"
+  - "<gradient:#ff4fd8:#7c4dff><bold>RIZZLERS</bold></gradient> <gray>»</gray> <white>Invite your friends and enjoy RIZZLERS!</white>"
